@@ -1,0 +1,73 @@
+{
+    "name": "@sklv-labs/ts-nestjs-health",
+    "version": "0.1.0",
+    "description": "NestJS health module",
+    "author": "sklv-labs",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/sklv-labs/ts-nestjs-health.git"
+    },
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "files": [
+        "dist",
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "format": "prettier --write \"src/**/*.ts\"",
+        "lint": "eslint \"src/**/*.ts\"",
+        "lint:fix": "eslint \"src/**/*.ts\" --fix",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:cov": "jest --coverage",
+        "type-check": "tsc --noEmit",
+        "prepublishOnly": "npm run type-check && npm run build",
+        "version:patch": "npm version patch && git push --follow-tags",
+        "version:minor": "npm version minor && git push --follow-tags",
+        "version:major": "npm version major && git push --follow-tags"
+    },
+    "peerDependencies": {
+        "@nestjs/common": "^11.1.12",
+        "@nestjs/core": "^11.1.12",
+        "@nestjs/terminus": "^11.0.0",
+        "@sklv-labs/ts-nestjs-database": "^0.1.0",
+        "@sklv-labs/ts-nestjs-error": "^0.1.1",
+        "@sklv-labs/ts-nestjs-logger": "^0.1.1",
+        "@sklv-labs/ts-nestjs-config": "^0.1.0",
+        "@sklv-labs/ts-core": "^0.1.0",
+        "reflect-metadata": "^0.2.2",
+        "rxjs": "^7.8.2"
+    },
+    "devDependencies": {
+        "@commitlint/cli": "^20.3.1",
+        "@commitlint/config-conventional": "^20.3.1",
+        "@nestjs/common": "^11.1.12",
+        "@nestjs/core": "^11.1.12",
+        "@nestjs/platform-express": "^11.1.12",
+        "@nestjs/testing": "^11.1.12",
+        "@nestjs/terminus": "^11.0.0",
+        "@sklv-labs/ts-dev-configs": "0.1.7",
+        "@types/express": "^5.0.6",
+        "@types/jest": "^30.0.0",
+        "@types/node": "^25.0.10",
+        "eslint": "^9.39.2",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-import-x": "^4.16.1",
+        "eslint-plugin-prettier": "^5.5.5",
+        "globals": "^17.1.0",
+        "jest": "^30.2.0",
+        "prettier": "^3.8.1",
+        "reflect-metadata": "^0.2.2",
+        "rxjs": "^7.8.2",
+        "ts-jest": "^29.4.6",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.53.1"
+    },
+    "engines": {
+        "node": ">=24.0.0"
+    }
+}
