@@ -43,6 +43,7 @@ export interface RabbitMQHealthIndicatorOptions {
 @Injectable()
 export class RabbitMQHealthIndicator extends BaseHealthIndicator {
   readonly name = 'rabbitmq';
+  readonly critical = true; // RabbitMQ is critical for application health
 
   private readonly connection: RabbitMQHealthIndicatorOptions['connection'];
   private readonly channel?: RabbitMQHealthIndicatorOptions['channel'];

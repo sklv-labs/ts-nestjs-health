@@ -34,6 +34,7 @@ export interface MemoryHealthIndicatorOptions {
 @Injectable()
 export class MemoryHealthIndicatorWrapper extends BaseHealthIndicator {
   readonly name = 'memory';
+  readonly critical = true; // Memory issues are critical
 
   private readonly memoryHealthIndicator: MemoryHealthIndicator;
   private readonly heapUsedThreshold: number;

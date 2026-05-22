@@ -41,4 +41,9 @@ export interface HealthCheckResult {
    * Error information if health check failed
    */
   error?: Record<string, HealthIndicatorResult>;
+
+  /**
+   * Critical indicator failures (these cause overall health to be 'down')
+   */
+  critical?: Record<string, HealthIndicatorResult>;
 }

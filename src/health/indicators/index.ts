@@ -1,5 +1,7 @@
 export * from './base-health-indicator';
+export * from './database-connection.interface';
 export * from './database-health.indicator';
+export * from './drizzle-adapter';
 export * from './redis-health.indicator';
 export * from './rabbitmq-health.indicator';
 export * from './external-service-health.indicator';

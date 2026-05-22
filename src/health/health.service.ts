@@ -14,17 +14,31 @@ import type { HealthCheckResult, HealthStatus } from './types/health-result.inte
 @Injectable()
 export class HealthService {
   private readonly indicators: Map<string, HealthIndicator> = new Map();
+  private indicatorsInitialized = false;
 
   constructor(
-    @Inject(HEALTH_OPTIONS) options: HealthModuleOptions,
+    @Inject(HEALTH_OPTIONS) private readonly options: HealthModuleOptions,
     @Optional() private readonly logger?: LoggerService
   ) {
-    // Register indicators from options
-    if (options.indicators) {
-      for (const indicator of options.indicators) {
+    // Register pre-instantiated indicators from options
+    if (this.options.indicators) {
+      for (const indicator of this.options.indicators) {
         this.registerIndicator(indicator);
       }
     }
+  }
+
+  /**
+   * Initialize indicators (called after module initialization)
+   */
+  onModuleInit(): void {
+    if (this.indicatorsInitialized) {
+      return;
+    }
+
+    // All indicators should be pre-instantiated and passed via options.indicators
+    // No need for DI-based resolution anymore
+    this.indicatorsInitialized = true;
   }
 
   /**
@@ -78,6 +92,7 @@ export class HealthService {
       const results: Record<string, { status: HealthStatus; [key: string]: unknown }> = {};
       const errors: Record<string, { status: HealthStatus; [key: string]: unknown }> = {};
       const info: Record<string, { status: HealthStatus; [key: string]: unknown }> = {};
+      const criticalErrors: Record<string, { status: HealthStatus; [key: string]: unknown }> = {};
 
       // Execute all indicators
       const checkPromises = Array.from(this.indicators.entries()).map(async ([name, indicator]) => {
@@ -89,9 +104,14 @@ export class HealthService {
             info[name] = result;
           } else {
             errors[name] = result;
+            // Track critical indicator failures separately
+            if (indicator.critical !== false) {
+              // Default to critical if not explicitly set to false
+              criticalErrors[name] = result;
+            }
           }
 
-          return { name, result, error: null };
+          return { name, result, error: null, isCritical: indicator.critical !== false };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           const errorResult = {
@@ -103,26 +123,41 @@ export class HealthService {
           results[name] = errorResult;
           errors[name] = errorResult;
 
+          // Track critical indicator failures separately
+          if (indicator.critical !== false) {
+            // Default to critical if not explicitly set to false
+            criticalErrors[name] = errorResult;
+          }
+
           this.logger?.error(
-            `Health check failed for indicator: ${name}`,
-            { indicator: name, error: errorMessage },
+            `Health check failed for indicator: ${name}${indicator.critical !== false ? ' (critical)' : ''}`,
+            { indicator: name, critical: indicator.critical !== false, error: errorMessage },
             HEALTH_LOG_CONTEXT.HEALTH_SERVICE
           );
 
-          return { name, result: null, error };
+          return { name, result: null, error, isCritical: indicator.critical !== false };
         }
       });
 
       await Promise.all(checkPromises);
 
       const duration = Date.now() - startTime;
-      const overallStatus: HealthStatus = Object.keys(errors).length === 0 ? 'up' : 'down';
+      // Overall status is 'down' if any critical indicators failed, otherwise check all indicators
+      const overallStatus: HealthStatus =
+        Object.keys(criticalErrors).length > 0
+          ? 'down'
+          : Object.keys(errors).length === 0
+            ? 'up'
+            : 'down';
 
       const healthResult: HealthCheckResult = {
         status: overallStatus,
         ...(Object.keys(info).length > 0 && { info }),
         ...(Object.keys(results).length > 0 && { details: results }),
         ...(Object.keys(errors).length > 0 && { error: errors }),
+        ...(Object.keys(criticalErrors).length > 0 && {
+          critical: criticalErrors,
+        }),
       };
 
       this.logger?.info(
@@ -133,6 +168,7 @@ export class HealthService {
           indicatorsChecked: indicatorNames.length,
           healthy: Object.keys(info).length,
           unhealthy: Object.keys(errors).length,
+          criticalFailures: Object.keys(criticalErrors).length,
         },
         HEALTH_LOG_CONTEXT.HEALTH_SERVICE
       );

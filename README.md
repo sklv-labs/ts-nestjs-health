@@ -7,11 +7,13 @@ A comprehensive health check package for NestJS services that wraps `@nestjs/ter
 - 🎯 **Type-Safe** - Full TypeScript support with comprehensive type definitions
 - 🚀 **Easy Setup** - Simple API for both synchronous and asynchronous configuration
 - 🛠️ **NestJS Native** - Built on top of NestJS with seamless integration
-- 📦 **Built-in Indicators** - Ready-to-use health indicators for Drizzle ORM, Redis, RabbitMQ, external services, memory, and disk
-- 🔌 **Extensible** - Easy to create custom health indicators
+- 📦 **Built-in Indicators** - Ready-to-use health indicators for databases, Redis, RabbitMQ, external services, memory, and disk
+- 🔌 **Extensible** - Easy to create custom health indicators with ORM-agnostic database support
 - ☸️ **Kubernetes Ready** - Built-in support for readiness/liveness/startup probes
 - 📊 **Structured Logging** - Integrated with `@sklv-labs/ts-nestjs-logger` for observability
 - ⚡ **Error Handling** - Consistent error handling with `@sklv-labs/ts-nestjs-error`
+- 🗄️ **Multiple Databases** - Support for monitoring multiple database connections with custom names
+- 🔧 **Flexible Configuration** - Factory methods and DI-based providers for different use cases
 
 ## Installation
 
@@ -63,7 +65,7 @@ export class AppModule {}
 // app.module.ts
 import { Module } from '@nestjs/common';
 import { HealthModule, DatabaseHealthIndicator } from '@sklv-labs/ts-nestjs-health';
-import { DrizzleModule } from '@sklv-labs/ts-nestjs-database/drizzle';
+import { DrizzleModule, DRIZZLE_INSTANCE } from '@sklv-labs/ts-nestjs-database/drizzle';
 
 @Module({
   imports: [
@@ -75,7 +77,8 @@ import { DrizzleModule } from '@sklv-labs/ts-nestjs-database/drizzle';
     }),
     HealthModule.forRoot({
       indicators: [
-        DatabaseHealthIndicator.forDrizzle(), // Uses injected Drizzle instance
+        // Note: In real usage, drizzleInstance would be injected
+        // This is a simplified example - see async config below
       ],
     }),
   ],
@@ -89,19 +92,35 @@ export class AppModule {}
 // app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { HealthModule } from '@sklv-labs/ts-nestjs-health';
+import { HealthModule, DatabaseHealthIndicator } from '@sklv-labs/ts-nestjs-health';
+import { DrizzleModule, DRIZZLE_INSTANCE } from '@sklv-labs/ts-nestjs-database/drizzle';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
-    HealthModule.forRootAsync({
-      imports: [ConfigModule],
+    DrizzleModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
+        dialect: 'postgresql',
+        connection: {
+          connectionString: config.get('DATABASE_URL'),
+        },
+      }),
+    }),
+    HealthModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService, DRIZZLE_INSTANCE],
+      useFactory: (config: ConfigService, drizzleInstance: { execute: (query: unknown) => Promise<unknown> }) => ({
         path: config.get('HEALTH_PATH', '/health'),
         timeout: config.get('HEALTH_TIMEOUT', 5000),
         enableReadiness: config.get('HEALTH_ENABLE_READINESS', true),
         enableLiveness: config.get('HEALTH_ENABLE_LIVENESS', true),
+        indicators: [
+          DatabaseHealthIndicator.forDrizzle(drizzleInstance, {
+            name: 'database',
+            timeout: config.get('HEALTH_TIMEOUT', 5000),
+          }),
+        ],
       }),
     }),
   ],
@@ -140,18 +159,93 @@ Once configured, the following endpoints are available:
 
 ## Built-in Health Indicators
 
-### Database Health Indicator (Drizzle ORM)
+### Database Health Indicator
 
-Integrates with `@sklv-labs/ts-nestjs-database`:
+The database health indicator is ORM-agnostic and works with any database through the `DatabaseConnection` interface. It supports multiple databases and various configuration options.
+
+#### Using with Drizzle ORM
 
 ```typescript
-import { DatabaseHealthIndicator } from '@sklv-labs/ts-nestjs-health';
+import { HealthModule, DatabaseHealthIndicator } from '@sklv-labs/ts-nestjs-health';
+import { DrizzleModule, DRIZZLE_INSTANCE } from '@sklv-labs/ts-nestjs-database/drizzle';
+import { sql } from 'drizzle-orm';
 
-HealthModule.forRoot({
-  indicators: [
-    DatabaseHealthIndicator.forDrizzle(), // Uses injected Drizzle instance
+@Module({
+  imports: [
+    DrizzleModule.forRoot({ /* ... */ }),
+    HealthModule.forRootAsync({
+      inject: [DRIZZLE_INSTANCE],
+      useFactory: (drizzleInstance: { execute: (query: unknown) => Promise<unknown> }) => ({
+        indicators: [
+          DatabaseHealthIndicator.forDrizzle(drizzleInstance, {
+            name: 'database',
+            timeout: 5000,
+            query: sql`SELECT 1`, // Optional custom query
+          }),
+        ],
+      }),
+    }),
   ],
 })
+export class AppModule {}
+```
+
+#### Multiple Databases
+
+You can monitor multiple database connections:
+
+```typescript
+import { HealthModule, DatabaseHealthIndicator } from '@sklv-labs/ts-nestjs-health';
+
+@Module({
+  imports: [
+    HealthModule.forRoot({
+      indicators: [
+        DatabaseHealthIndicator.forDrizzle(primaryDb, {
+          name: 'primary-db',
+          critical: true,
+        }),
+        DatabaseHealthIndicator.forDrizzle(readReplicaDb, {
+          name: 'read-replica',
+          critical: false, // Non-critical, won't affect overall health
+          timeout: 3000,
+        }),
+      ],
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+#### Custom Database Connection
+
+For other ORMs or custom database connections:
+
+```typescript
+import { DatabaseHealthIndicator, DatabaseConnection } from '@sklv-labs/ts-nestjs-health';
+
+// Create a custom connection adapter
+const customConnection: DatabaseConnection = {
+  execute: async (query) => {
+    // Your database health check logic
+    return await myDatabase.ping();
+  },
+};
+
+@Module({
+  imports: [
+    HealthModule.forRoot({
+      indicators: [
+        new DatabaseHealthIndicator({
+          connection: customConnection,
+          name: 'custom-db',
+          timeout: 5000,
+        }),
+      ],
+    }),
+  ],
+})
+export class AppModule {}
 ```
 
 ### Redis Health Indicator

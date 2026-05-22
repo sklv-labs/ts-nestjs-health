@@ -41,6 +41,7 @@ export interface ExternalServiceHealthIndicatorOptions {
 @Injectable()
 export class ExternalServiceHealthIndicator extends BaseHealthIndicator {
   readonly name = 'external-service';
+  readonly critical = false; // External services are typically non-critical
 
   private readonly httpHealthIndicator: HttpHealthIndicator;
   private readonly url: string;

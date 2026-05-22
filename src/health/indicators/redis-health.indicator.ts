@@ -32,6 +32,7 @@ export interface RedisHealthIndicatorOptions {
 @Injectable()
 export class RedisHealthIndicator extends BaseHealthIndicator {
   readonly name = 'redis';
+  readonly critical = true; // Redis is critical for application health
 
   private readonly client: RedisHealthIndicatorOptions['client'];
   private readonly timeout: number;

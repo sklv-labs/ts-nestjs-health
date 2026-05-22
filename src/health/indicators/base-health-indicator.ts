@@ -14,6 +14,13 @@ export abstract class BaseHealthIndicator implements HealthIndicator {
   abstract readonly name: string;
 
   /**
+   * Whether this indicator is critical for overall health
+   * If true, failure of this indicator will cause overall health to be 'down'
+   * @default true
+   */
+  readonly critical: boolean = true;
+
+  /**
    * Perform the health check
    *
    * @returns Promise resolving to health indicator result

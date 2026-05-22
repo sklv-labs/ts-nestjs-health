@@ -39,6 +39,7 @@ export interface DiskHealthIndicatorOptions {
 @Injectable()
 export class DiskHealthIndicatorWrapper extends BaseHealthIndicator {
   readonly name = 'disk';
+  readonly critical = true; // Disk space issues are critical
 
   private readonly diskHealthIndicator: DiskHealthIndicator;
   private readonly path: string;

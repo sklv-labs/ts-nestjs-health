@@ -1,11 +1,11 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
-import { DRIZZLE_INSTANCE, type DrizzleDatabase } from '@sklv-labs/ts-nestjs-database/drizzle';
+import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 
 import { HealthCheckError } from '../health-error';
 
 import { BaseHealthIndicator } from './base-health-indicator';
 
+import type { DatabaseConnection } from './database-connection.interface';
 import type { HealthIndicatorResult } from '../types/health-result.interface';
 
 /**
@@ -13,56 +13,116 @@ import type { HealthIndicatorResult } from '../types/health-result.interface';
  */
 export interface DatabaseHealthIndicatorOptions {
   /**
-   * Drizzle database instance (optional if injected via DRIZZLE_INSTANCE)
+   * Database connection to check
    */
-  instance?: DrizzleDatabase;
+  connection: DatabaseConnection;
+
+  /**
+   * Unique name for this database indicator
+   * Allows multiple database indicators with different names
+   * @default 'database'
+   */
+  name?: string;
+
+  /**
+   * Whether this indicator is critical for overall health
+   * @default true
+   */
+  critical?: boolean;
 
   /**
    * Timeout for database connection check in milliseconds
    * @default 5000
    */
   timeout?: number;
+
+  /**
+   * Custom health check query
+   * If not provided, a simple connection test will be performed
+   * The format depends on the database connection implementation
+   */
+  query?: unknown;
 }
 
 /**
- * Database health indicator for Drizzle ORM
- * Integrates with @sklv-labs/ts-nestjs-database
+ * Database health indicator
+ * Works with any database/ORM through the DatabaseConnection interface
+ *
+ * @example
+ * ```typescript
+ * // Using factory method for Drizzle
+ * const indicator = DatabaseHealthIndicator.forDrizzle(drizzleInstance, {
+ *   name: 'primary-db',
+ *   timeout: 3000,
+ * });
+ *
+ * // Using with custom connection
+ * const indicator = new DatabaseHealthIndicator({
+ *   connection: myCustomConnection,
+ *   name: 'custom-db',
+ * });
+ * ```
  */
 @Injectable()
 export class DatabaseHealthIndicator extends BaseHealthIndicator {
-  readonly name = 'database';
+  readonly name: string;
+  readonly critical: boolean;
 
-  private readonly db: DrizzleDatabase;
+  private readonly connection: DatabaseConnection;
   private readonly timeout: number;
+  private readonly query: unknown;
 
-  constructor(
-    @Optional() @Inject(DRIZZLE_INSTANCE) drizzleInstance?: DrizzleDatabase,
-    options?: DatabaseHealthIndicatorOptions
-  ) {
+  constructor(options: DatabaseHealthIndicatorOptions) {
     super();
 
-    // Use provided instance, injected instance, or throw error
-    if (options?.instance) {
-      this.db = options.instance;
-    } else if (drizzleInstance) {
-      this.db = drizzleInstance;
-    } else {
-      throw new Error(
-        'DatabaseHealthIndicator: Drizzle instance not found. Either provide instance in options or ensure DrizzleModule is imported.'
-      );
+    if (!options.connection) {
+      throw new Error('Database connection is required');
     }
 
-    this.timeout = options?.timeout ?? 5000;
+    this.connection = options.connection;
+    this.name = options.name ?? 'database';
+    this.critical = options.critical ?? true;
+    this.timeout = options.timeout ?? 5000;
+    this.query = options.query;
   }
 
   /**
-   * Factory method to create database health indicator with explicit instance
+   * Factory method to create a database health indicator for Drizzle ORM
    *
-   * @param options - Database health indicator options
+   * @param drizzleInstance - Drizzle database instance (must have execute method)
+   * @param options - Optional configuration
    * @returns Database health indicator instance
+   *
+   * @example
+   * ```typescript
+   * import { sql } from 'drizzle-orm';
+   *
+   * const indicator = DatabaseHealthIndicator.forDrizzle(drizzleInstance, {
+   *   name: 'primary-db',
+   *   timeout: 3000,
+   *   query: sql`SELECT 1`,
+   * });
+   * ```
    */
-  static forDrizzle(options?: DatabaseHealthIndicatorOptions): DatabaseHealthIndicator {
-    return new DatabaseHealthIndicator(undefined, options);
+  static forDrizzle(
+    drizzleInstance: { execute: (query: unknown) => Promise<unknown> },
+    options?: Omit<DatabaseHealthIndicatorOptions, 'connection'>
+  ): DatabaseHealthIndicator {
+    // Default to using Drizzle's sql template for health check
+    const defaultQuery = sql`SELECT 1`;
+
+    return new DatabaseHealthIndicator({
+      connection: {
+        execute: (query) => {
+          // Use provided query or default to SELECT 1
+          const healthCheckQuery = query ?? defaultQuery;
+          return drizzleInstance.execute(healthCheckQuery);
+        },
+      },
+      // Use default query if none provided
+      query: options?.query ?? defaultQuery,
+      ...options,
+    });
   }
 
   /**
@@ -72,11 +132,11 @@ export class DatabaseHealthIndicator extends BaseHealthIndicator {
    */
   async check(): Promise<HealthIndicatorResult> {
     try {
-      // Execute a simple query to test connection
-      // Use type assertion since execute exists on all Drizzle database types
-      const db = this.db as { execute: (query: unknown) => Promise<unknown> };
+      // Use custom query if provided, otherwise use a simple connection test
+      const query = this.query ?? 'SELECT 1';
+
       await this.withTimeout(
-        db.execute(sql`select 1`),
+        this.connection.execute(query),
         this.timeout,
         `Database health check timed out after ${this.timeout}ms`
       );

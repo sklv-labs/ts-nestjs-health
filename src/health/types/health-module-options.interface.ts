@@ -1,5 +1,4 @@
 import type { HealthIndicator } from './health-indicator.interface';
-import type { Type } from '@nestjs/common';
 import type { ModuleMetadata } from '@nestjs/common/interfaces';
 
 /**
@@ -37,7 +36,8 @@ export interface HealthModuleOptions {
   timeout?: number;
 
   /**
-   * Custom health indicators to register
+   * Pre-instantiated health indicators to register
+   * Use factory methods to create indicators (e.g., DatabaseHealthIndicator.forDrizzle())
    */
   indicators?: HealthIndicator[];
 }
@@ -50,9 +50,9 @@ export interface HealthModuleAsyncOptions<TFactoryArgs extends unknown[] = unkno
   'imports'
 > {
   /**
-   * Dependencies to inject into `useFactory` (e.g., `ConfigService`)
+   * Dependencies to inject into `useFactory` (e.g., `ConfigService`, `DRIZZLE_INSTANCE`)
    */
-  inject?: { [K in keyof TFactoryArgs]: Type<TFactoryArgs[K]> | string | symbol };
+  inject?: Array<string | symbol | (new (...args: unknown[]) => unknown)>;
 
   /**
    * Factory returning the `HealthModuleOptions` (sync or async)

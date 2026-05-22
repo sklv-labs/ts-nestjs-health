@@ -1,4 +1,4 @@
-import { DynamicModule, Module, Provider, Type } from '@nestjs/common';
+import { DynamicModule, Module, OnModuleInit, Provider } from '@nestjs/common';
 import { TerminusModule } from '@nestjs/terminus';
 
 import { HEALTH_OPTIONS } from './health.constants';
@@ -33,7 +33,12 @@ import type {
  * ```
  */
 @Module({})
-export class HealthModule {
+export class HealthModule implements OnModuleInit {
+  constructor(private readonly healthService: HealthService) {}
+
+  onModuleInit(): void {
+    this.healthService.onModuleInit();
+  }
   /**
    * Synchronously configure the Health module
    *
@@ -92,7 +97,7 @@ export class HealthModule {
     const healthOptionsProvider: Provider = {
       provide: HEALTH_OPTIONS,
       useFactory: options.useFactory,
-      inject: (options.inject ?? []) as Array<Type<unknown> | string | symbol>,
+      inject: options.inject ?? [],
     };
 
     return {
